@@ -1,0 +1,43 @@
+name: Epic
+description: A broad research task assigned by the PI
+labels: ["epic", "pi-approve"]
+body:
+  - type: input
+    id: title
+    attributes:
+      label: Epic title
+      placeholder: "e.g. Map the landscape of AI tools used in qualitative interviews"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What needs to be done and why
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done
+      description: What outputs/commits mark this epic as complete?
+      placeholder: |
+        - [ ] 15+ papers summarised in literature/summaries/
+        - [ ] Synthesis note committed
+        - [ ] Opens follow-up issues for gaps found
+    validations:
+      required: true
+  - type: dropdown
+    id: approval
+    attributes:
+      label: Approval required to close
+      options:
+        - PI approval required
+        - Student can self-approve
+    validations:
+      required: true
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone / semester
+      placeholder: "e.g. Semester 1"
