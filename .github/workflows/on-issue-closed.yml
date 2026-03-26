@@ -1,0 +1,76 @@
+name: Route issue closure by approval type
+
+on:
+  issues:
+    types: [closed]
+
+jobs:
+  route-closure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check approval label and route
+        env:
+          GH_TOKEN: ${{ secrets.ORG_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          LABELS: ${{ join(github.event.issue.labels.*.name, ', ') }}
+          ASSIGNEE: ${{ github.event.issue.assignee.login }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Labels: $LABELS"
+
+          if echo "$LABELS" | grep -q "pi-approve"; then
+            echo "PI approval required — reopening issue and flagging"
+
+            # Reopen the issue
+            curl -s -X PATCH \
+              -H "Authorization: token $GH_TOKEN" \
+              -H "Content-Type: application/json" \
+              "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+              -d '{"state": "open"}'
+
+            # Add awaiting-pi-approval label
+            curl -s -X POST \
+              -H "Authorization: token $GH_TOKEN" \
+              -H "Content-Type: application/json" \
+              "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/labels" \
+              -d '{"labels": ["awaiting-pi-approval"]}'
+
+            # Comment on issue
+            curl -s -X POST \
+              -H "Authorization: token $GH_TOKEN" \
+              -H "Content-Type: application/json" \
+              "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
+              -d "{\"body\": \"This issue requires PI approval before closing. @hjalmarzukile — please review and approve via the overlay or by adding the \`pi-approved\` label.\"}"
+
+          elif echo "$LABELS" | grep -q "self-approve"; then
+            echo "Self-approve — archiving task file in student inbox"
+
+            INBOX_REPO="hjalmarzukile/inbox-${ASSIGNEE}"
+            SLUG=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | cut -c1-40)
+            FILENAME="${ISSUE_NUMBER}_${SLUG}.md"
+
+            # Get the file SHA from open/
+            FILE_DATA=$(curl -s \
+              -H "Authorization: token $GH_TOKEN" \
+              "https://api.github.com/repos/${INBOX_REPO}/contents/tasks/open/${FILENAME}")
+            SHA=$(echo "$FILE_DATA" | python3 -c "import json,sys; print(json.load(sys.stdin).get('sha',''))" 2>/dev/null)
+            CONTENT=$(echo "$FILE_DATA" | python3 -c "import json,sys; print(json.load(sys.stdin).get('content',''))" 2>/dev/null)
+
+            if [ -n "$SHA" ]; then
+              # Create in done/
+              curl -s -X PUT \
+                -H "Authorization: token $GH_TOKEN" \
+                -H "Content-Type: application/json" \
+                "https://api.github.com/repos/${INBOX_REPO}/contents/tasks/done/${FILENAME}" \
+                -d "{\"message\": \"task: close #${ISSUE_NUMBER} — self-approved\", \"content\": \"${CONTENT}\"}"
+
+              # Delete from open/
+              curl -s -X DELETE \
+                -H "Authorization: token $GH_TOKEN" \
+                -H "Content-Type: application/json" \
+                "https://api.github.com/repos/${INBOX_REPO}/contents/tasks/open/${FILENAME}" \
+                -d "{\"message\": \"task: archive #${ISSUE_NUMBER} from open\", \"sha\": \"${SHA}\"}"
+            fi
+          fi
