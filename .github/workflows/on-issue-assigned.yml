@@ -1,0 +1,51 @@
+name: Mirror assigned issue to student inbox
+
+on:
+  issues:
+    types: [assigned]
+
+jobs:
+  mirror-to-inbox:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get assignee and build task file
+        env:
+          GH_TOKEN: ${{ secrets.ORG_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ASSIGNEE: ${{ github.event.assignee.login }}
+          LABELS: ${{ join(github.event.issue.labels.*.name, ', ') }}
+          MILESTONE: ${{ github.event.issue.milestone.title }}
+          REPO: ${{ github.repository }}
+        run: |
+          INBOX_REPO="hjalmarzukile/inbox-${ASSIGNEE}"
+          SLUG=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | cut -c1-40)
+          FILENAME="${ISSUE_NUMBER}_${SLUG}.md"
+          DATE=$(date +%Y-%m-%d)
+
+          CONTENT="# Task: ${ISSUE_TITLE}
+          Source: ${REPO}#${ISSUE_NUMBER}
+          URL: ${ISSUE_URL}
+          Assigned: ${DATE}
+          Milestone: ${MILESTONE}
+          Labels: ${LABELS}
+
+          ## Description
+          ${ISSUE_BODY}
+
+          ## Status
+          - [ ] In progress
+          - [ ] Ready for review
+          "
+
+          ENCODED=$(echo "$CONTENT" | base64 -w 0)
+
+          curl -s -X PUT \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/${INBOX_REPO}/contents/tasks/open/${FILENAME}" \
+            -d "{\"message\": \"task: mirror issue #${ISSUE_NUMBER} from ${REPO}\", \"content\": \"${ENCODED}\"}"
+
+          echo "Task file created in ${INBOX_REPO}/tasks/open/${FILENAME}"
