@@ -1,0 +1,43 @@
+name: Task
+description: An actionable sub-task that deserves its own commit
+labels: ["task"]
+body:
+  - type: input
+    id: parent
+    attributes:
+      label: Parent epic
+      placeholder: "#parent: 3"
+    validations:
+      required: true
+  - type: input
+    id: title
+    attributes:
+      label: Task title
+      placeholder: "e.g. Summarise Smith & Jones 2023 on AI interview bias"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What needs to be done
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done
+      placeholder: |
+        - [ ] Summary committed to literature/summaries/smith_jones_2023.md
+        - [ ] Closes this issue in commit message
+    validations:
+      required: true
+  - type: dropdown
+    id: approval
+    attributes:
+      label: Approval to close
+      options:
+        - PI approval required
+        - Student can self-approve
+    validations:
+      required: true
