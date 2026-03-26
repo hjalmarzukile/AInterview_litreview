@@ -1,0 +1,64 @@
+name: Log commit to Research OS project
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add commit as draft item in project
+        run: |
+          python3 << '"EOF"'
+          import os, json, urllib.request
+
+          token   = os.environ["PROJECT_TOKEN"]
+          sha     = os.environ["SHA"][:7]
+          message = os.environ["MESSAGE"].split("\n")[0][:100]
+          author  = os.environ["AUTHOR"]
+          repo    = os.environ["REPO"]
+          url     = os.environ["URL"]
+
+          title = f"[{sha}] {message} ({repo.split("/")[1]})"
+          body  = f"**Repo:** {repo}  \n**Author:** {author}  \n**Commit:** [{sha}]({url})"
+
+          query = """
+          mutation($projectId: ID\!, $title: String\!, $body: String\!) {
+            addProjectV2DraftIssue(input: {
+              projectId: $projectId, title: $title, body: $body
+            }) { projectItem { id } }
+          }
+          """
+
+          payload = json.dumps({
+            "query": query,
+            "variables": {
+              "projectId": "PVT_kwHOAMvkDs4BS6Qj",
+              "title": title,
+              "body": body
+            }
+          }).encode()
+
+          req = urllib.request.Request(
+            "https://api.github.com/graphql",
+            data=payload,
+            headers={
+              "Authorization": f"bearer {token}",
+              "Content-Type": "application/json",
+              "Accept": "application/vnd.github+json"
+            }
+          )
+          with urllib.request.urlopen(req) as r:
+            result = json.loads(r.read().decode())
+            if "errors" in result:
+              raise RuntimeError(result["errors"])
+            print("Added:", result["data"]["addProjectV2DraftIssue"]["projectItem"]["id"])
+          EOF
+        env:
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          SHA:     ${{ github.sha }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+          AUTHOR:  ${{ github.event.head_commit.author.name }}
+          REPO:    ${{ github.repository }}
+          URL:     ${{ github.event.head_commit.url }}
